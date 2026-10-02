@@ -65,6 +65,15 @@ struct CHandler {
     user: *mut c_void,
 }
 
+fn c_handler(handler: IniHandlerFn, user: *mut c_void) -> CHandler {
+    CHandler { f: handler, user }
+}
+
+fn parse_bytes(cfg: &IniConfig, bytes: &[u8], handler: IniHandlerFn, user: *mut c_void) -> c_int {
+    let mut ch = c_handler(handler, user);
+    core_parse_string_length(cfg, bytes, &mut ch) as c_int
+}
+
 impl IniHandler for CHandler {
     fn handle(
         &mut self,
@@ -160,8 +169,7 @@ pub unsafe extern "C" fn ini_parse_stream(
     let cfg = feature_config();
     // SAFETY: reader/stream contract matches C `ini_parse_stream`.
     let data = read_all_via_reader(reader, stream, cfg.max_line.max(64));
-    let mut ch = CHandler { f: handler, user };
-    core_parse_string_length(&cfg, &data, &mut ch) as c_int
+    parse_bytes(&cfg, &data, handler, user)
 }
 
 /// # Safety
@@ -178,8 +186,7 @@ pub unsafe extern "C" fn ini_parse_file(
     // SAFETY: `file` is a valid FILE*.
     let data = unsafe { read_c_file(file) };
     let cfg = feature_config();
-    let mut ch = CHandler { f: handler, user };
-    core_parse_string_length(&cfg, &data, &mut ch) as c_int
+    parse_bytes(&cfg, &data, handler, user)
 }
 
 /// # Safety
@@ -199,7 +206,7 @@ pub unsafe extern "C" fn ini_parse(
         return -1;
     };
     let cfg = feature_config();
-    let mut ch = CHandler { f: handler, user };
+    let mut ch = c_handler(handler, user);
     ini_parse_file_path(&cfg, Path::new(path), &mut ch) as c_int
 }
 
@@ -217,8 +224,7 @@ pub unsafe extern "C" fn ini_parse_string(
     // SAFETY: NUL-terminated C string.
     let s = unsafe { CStr::from_ptr(string) };
     let cfg = feature_config();
-    let mut ch = CHandler { f: handler, user };
-    core_parse_string_length(&cfg, s.to_bytes(), &mut ch) as c_int
+    parse_bytes(&cfg, s.to_bytes(), handler, user)
 }
 
 /// # Safety
@@ -236,8 +242,7 @@ pub unsafe extern "C" fn ini_parse_string_length(
     // SAFETY: caller guarantees `length` bytes at `string`.
     let bytes = unsafe { slice::from_raw_parts(string.cast::<u8>(), length) };
     let cfg = feature_config();
-    let mut ch = CHandler { f: handler, user };
-    core_parse_string_length(&cfg, bytes, &mut ch) as c_int
+    parse_bytes(&cfg, bytes, handler, user)
 }
 
 #[allow(dead_code)]

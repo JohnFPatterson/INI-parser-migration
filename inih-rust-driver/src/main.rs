@@ -43,17 +43,13 @@ impl IniHandler for Dumper {
         let Some(name) = name else {
             return true;
         };
+        print!("... {name}");
+        if let Some(v) = value {
+            print!("={v}");
+        }
         if self.handler_lineno {
-            print!("... {name}");
-            if let Some(v) = value {
-                print!("={v}");
-            }
             println!(";  line {lineno}");
         } else {
-            print!("... {name}");
-            if let Some(v) = value {
-                print!("={v}");
-            }
             println!(";");
         }
         match value {

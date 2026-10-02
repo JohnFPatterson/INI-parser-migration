@@ -196,31 +196,18 @@ fn lskip(buf: &[u8]) -> usize {
 
 pub(crate) fn find_chars_or_comment(cfg: &IniConfig, s: &[u8], chars: Option<&[u8]>) -> usize {
     let mut i = 0;
-    if cfg.allow_inline_comments {
-        let mut was_space = false;
-        while i < s.len() {
-            let c = s[i];
-            if let Some(ch) = chars {
-                if ch.contains(&c) {
-                    break;
-                }
-            }
-            if was_space && cfg.inline_comment_prefixes.as_bytes().contains(&c) {
-                break;
-            }
-            was_space = is_space(c);
-            i += 1;
+    let mut was_space = false;
+    let inline_prefixes = cfg.inline_comment_prefixes.as_bytes();
+    while i < s.len() {
+        let c = s[i];
+        if chars.is_some_and(|ch| ch.contains(&c)) {
+            break;
         }
-    } else {
-        while i < s.len() {
-            let c = s[i];
-            if let Some(ch) = chars {
-                if ch.contains(&c) {
-                    break;
-                }
-            }
-            i += 1;
+        if cfg.allow_inline_comments && was_space && inline_prefixes.contains(&c) {
+            break;
         }
+        was_space = cfg.allow_inline_comments && is_space(c);
+        i += 1;
     }
     i
 }
@@ -234,12 +221,18 @@ fn strncpy0(dest: &mut [u8], src: &[u8]) {
     dest[copy] = 0;
 }
 
-fn bytes_to_str(b: &[u8]) -> String {
+fn nul_terminated_utf8(buf: &[u8]) -> String {
+    String::from_utf8_lossy(&buf[..strlen(buf)]).into_owned()
+}
+
+fn utf8_lossy(b: &[u8]) -> String {
     String::from_utf8_lossy(b).into_owned()
 }
 
-fn cstr(buf: &[u8]) -> String {
-    bytes_to_str(&buf[..strlen(buf)])
+fn record_handler_error(error: &mut i32, lineno: i32, ok: bool) {
+    if !ok && *error == 0 {
+        *error = lineno;
+    }
 }
 
 struct StringReader<'a> {
@@ -271,6 +264,7 @@ impl StringReader<'_> {
 struct FileLineReader {
     file: File,
     pending: Vec<u8>,
+    pending_off: usize,
     eof: bool,
 }
 
@@ -279,6 +273,7 @@ impl FileLineReader {
         Ok(Self {
             file: File::open(path).map_err(|e| Error::Io(e.to_string()))?,
             pending: Vec::new(),
+            pending_off: 0,
             eof: false,
         })
     }
@@ -290,7 +285,9 @@ impl FileLineReader {
         let max = num - 1;
         let mut n = 0usize;
         while n < max {
-            if self.pending.is_empty() {
+            if self.pending_off >= self.pending.len() {
+                self.pending_off = 0;
+                self.pending.clear();
                 let mut chunk = [0u8; 1024];
                 match self.file.read(&mut chunk) {
                     Ok(0) => {
@@ -304,10 +301,11 @@ impl FileLineReader {
                     }
                 }
             }
-            if self.pending.is_empty() {
+            if self.pending_off >= self.pending.len() {
                 break;
             }
-            let c = self.pending.remove(0);
+            let c = self.pending[self.pending_off];
+            self.pending_off += 1;
             buf[n] = c;
             n += 1;
             if c == b'\n' {
@@ -348,9 +346,9 @@ fn parse_stream<H: IniHandler, A: HeapHooks>(
         cfg.initial_alloc
     };
     let mut line = vec![0u8; max_line.max(1)];
-    let mut alloc = alloc;
+    let mut heap_hooks = alloc;
     if !cfg.use_stack {
-        if let Some(a) = alloc.as_mut() {
+        if let Some(a) = heap_hooks.as_mut() {
             a.malloc(cfg.initial_alloc);
         }
     }
@@ -383,7 +381,7 @@ fn parse_stream<H: IniHandler, A: HeapHooks>(
                     max_line = cfg.max_line;
                 }
                 line.resize(max_line, 0);
-                if let Some(a) = alloc.as_mut() {
+                if let Some(a) = heap_hooks.as_mut() {
                     a.realloc(max_line);
                 }
                 let mut more = vec![0u8; (max_line - offset).max(1)];
@@ -434,7 +432,7 @@ fn parse_stream<H: IniHandler, A: HeapHooks>(
             // blank
         } else if cfg.start_comment_prefixes.as_bytes().contains(&kept[0]) {
             // comment
-        } else if cfg.allow_multiline && prev_name[0] != 0 && !kept.is_empty() && had_leading_ws {
+        } else if cfg.allow_multiline && prev_name[0] != 0 && had_leading_ws {
             let mut cont = kept;
             if cfg.allow_inline_comments {
                 let end = find_chars_or_comment(cfg, &cont, None);
@@ -442,12 +440,10 @@ fn parse_stream<H: IniHandler, A: HeapHooks>(
                 let n = rstrip_len(&mut cont);
                 cont.truncate(n);
             }
-            let prev = cstr(&prev_name);
-            let section_s = cstr(&section);
-            let val = bytes_to_str(&cont);
-            if !handler.handle(&section_s, Some(&prev), Some(&val), lineno) && error == 0 {
-                error = lineno;
-            }
+            let prev = nul_terminated_utf8(&prev_name);
+            let section_s = nul_terminated_utf8(&section);
+            let val = utf8_lossy(&cont);
+            record_handler_error(&mut error, lineno, handler.handle(&section_s, Some(&prev), Some(&val), lineno));
         } else if kept[0] == b'[' {
             let end = find_chars_or_comment(cfg, &kept[1..], Some(b"]"));
             if 1 + end < kept.len() && kept[1 + end] == b']' {
@@ -456,10 +452,12 @@ fn parse_stream<H: IniHandler, A: HeapHooks>(
                     prev_name[0] = 0;
                 }
                 if cfg.call_handler_on_new_section {
-                    let section_s = cstr(&section);
-                    if !handler.handle(&section_s, None, None, lineno) && error == 0 {
-                        error = lineno;
-                    }
+                    let section_s = nul_terminated_utf8(&section);
+                    record_handler_error(
+                        &mut error,
+                        lineno,
+                        handler.handle(&section_s, None, None, lineno),
+                    );
                 }
             } else if error == 0 {
                 error = lineno;
@@ -485,22 +483,25 @@ fn parse_stream<H: IniHandler, A: HeapHooks>(
                 if cfg.allow_multiline {
                     strncpy0(&mut prev_name, &name);
                 }
-                let section_s = cstr(&section);
-                let name_s = bytes_to_str(&name);
-                let value_s = bytes_to_str(&value);
-                if !handler.handle(&section_s, Some(&name_s), Some(&value_s), lineno) && error == 0
-                {
-                    error = lineno;
-                }
+                let section_s = nul_terminated_utf8(&section);
+                let name_s = utf8_lossy(&name);
+                let value_s = utf8_lossy(&value);
+                record_handler_error(
+                    &mut error,
+                    lineno,
+                    handler.handle(&section_s, Some(&name_s), Some(&value_s), lineno),
+                );
             } else if cfg.allow_no_value {
                 let mut name = buf[..end.min(buf.len())].to_vec();
                 let nlen = rstrip_len(&mut name);
                 name.truncate(nlen);
-                let section_s = cstr(&section);
-                let name_s = bytes_to_str(&name);
-                if !handler.handle(&section_s, Some(&name_s), None, lineno) && error == 0 {
-                    error = lineno;
-                }
+                let section_s = nul_terminated_utf8(&section);
+                let name_s = utf8_lossy(&name);
+                record_handler_error(
+                    &mut error,
+                    lineno,
+                    handler.handle(&section_s, Some(&name_s), None, lineno),
+                );
             } else if error == 0 {
                 error = lineno;
             }
@@ -512,7 +513,7 @@ fn parse_stream<H: IniHandler, A: HeapHooks>(
     }
 
     if !cfg.use_stack {
-        if let Some(a) = alloc.as_mut() {
+        if let Some(a) = heap_hooks.as_mut() {
             a.free();
         }
     }
@@ -525,10 +526,7 @@ pub fn ini_parse_string_with_alloc<H: IniHandler, A: HeapHooks>(
     handler: &mut H,
     alloc: &mut A,
 ) -> ParseResult {
-    let mut reader = Reader::String(StringReader {
-        data: data.as_bytes(),
-        pos: 0,
-    });
+    let mut reader = Reader::String(string_reader(data.as_bytes()));
     parse_stream(cfg, &mut reader, handler, Some(alloc))
 }
 
@@ -537,13 +535,7 @@ pub fn ini_parse_string<H: IniHandler>(
     data: &str,
     handler: &mut H,
 ) -> ParseResult {
-    let mut reader = Reader::String(StringReader {
-        data: data.as_bytes(),
-        pos: 0,
-    });
-    let mut no = NoHeap;
-    let hooks = if cfg.use_stack { None } else { Some(&mut no) };
-    parse_stream(cfg, &mut reader, handler, hooks)
+    ini_parse_string_length(cfg, data.as_bytes(), handler)
 }
 
 pub fn ini_parse_string_length<H: IniHandler>(
@@ -551,10 +543,7 @@ pub fn ini_parse_string_length<H: IniHandler>(
     data: &[u8],
     handler: &mut H,
 ) -> ParseResult {
-    let mut reader = Reader::String(StringReader { data, pos: 0 });
-    let mut no = NoHeap;
-    let hooks = if cfg.use_stack { None } else { Some(&mut no) };
-    parse_stream(cfg, &mut reader, handler, hooks)
+    parse_stream_with_default_hooks(cfg, Reader::String(string_reader(data)), handler)
 }
 
 pub fn ini_parse_file_path<H: IniHandler>(
@@ -566,8 +555,24 @@ pub fn ini_parse_file_path<H: IniHandler>(
         Ok(f) => f,
         Err(_) => return -1,
     };
-    let mut reader = Reader::File(file);
+    parse_stream_with_default_hooks(cfg, Reader::File(file), handler)
+}
+
+fn string_reader(data: &[u8]) -> StringReader<'_> {
+    StringReader { data, pos: 0 }
+}
+
+fn parse_stream_with_default_hooks<H: IniHandler>(
+    cfg: &IniConfig,
+    reader: Reader<'_>,
+    handler: &mut H,
+) -> ParseResult {
+    let mut reader = reader;
     let mut no = NoHeap;
-    let hooks = if cfg.use_stack { None } else { Some(&mut no) };
+    let hooks = if cfg.use_stack {
+        None
+    } else {
+        Some(&mut no)
+    };
     parse_stream(cfg, &mut reader, handler, hooks)
 }
