@@ -1,2 +1,5 @@
 # Ensure MSVC CI tests with the same line endings that are used in the tarball
 /tests/baseline_*.txt		eol=lf
+
+# Parity fixtures: preserve bytes (CRLF etc.) for pin stability
+/tests/parity/** -text
