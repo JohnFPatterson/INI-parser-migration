@@ -1,5 +1,5 @@
 //! Safe Rust port of inih parser logic.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 use std::fs::File;
 use std::io::Read;

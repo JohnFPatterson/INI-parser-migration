@@ -36,7 +36,7 @@ fn ffi_parse_string_length() {
     let e = unsafe {
         ini_parse_string_length(
             s.as_ptr() as *const c_char,
-            s.len(),
+            s.len() as u64,
             Some(ok_handler),
             ptr::null_mut(),
         )
