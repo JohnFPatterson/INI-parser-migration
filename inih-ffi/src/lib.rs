@@ -184,12 +184,13 @@ pub unsafe extern "C" fn ini_parse_file(
 
 /// # Safety
 /// `filename` must be a valid C string.
+///
+/// DEMO: Bugbot Rule 3 — signature differs from `ini.h` (`int` → `i64`, dropped `user`).
 #[no_mangle]
 pub unsafe extern "C" fn ini_parse(
     filename: *const c_char,
     handler: IniHandlerFn,
-    user: *mut c_void,
-) -> c_int {
+) -> i64 {
     if filename.is_null() {
         return -1;
     }
@@ -199,8 +200,11 @@ pub unsafe extern "C" fn ini_parse(
         return -1;
     };
     let cfg = feature_config();
-    let mut ch = CHandler { f: handler, user };
-    ini_parse_file_path(&cfg, Path::new(path), &mut ch) as c_int
+    let mut ch = CHandler {
+        f: handler,
+        user: ptr::null_mut(),
+    };
+    i64::from(ini_parse_file_path(&cfg, Path::new(path), &mut ch))
 }
 
 /// # Safety

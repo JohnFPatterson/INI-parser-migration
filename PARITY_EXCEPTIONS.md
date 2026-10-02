@@ -20,6 +20,6 @@ Cite C lines in the current source. If the SonarQube analysis predates edits to 
 
 | ID | C file:line | Sonar key | Finding | C behavior | Rust behavior | Approval | Test | Fixture |
 |----|-------------|-----------|---------|------------|---------------|----------|------|---------|
-| — | — | — | — | — | — | — | — | — |
+| PE-001 | ini.c:49 | c:S912 @ ini.c:49 | Side effect in RHS of `&&` | Walks backward with `*--end` while testing `isspace` | Claims a safer rstrip path (demo row; no matching test) | demo | pe_001_rstrip_side_effect | — |
 
-**None** for this port. No driver-compared behavior was changed for SonarQube findings.
+DEMO: Bugbot Rule 2 — `PE-001` names `pe_001_rstrip_side_effect`, which is not a `#[test]` in `inih-core/tests/exceptions.rs`.

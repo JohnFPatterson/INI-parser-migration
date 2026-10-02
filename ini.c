@@ -44,10 +44,18 @@ typedef struct {
 
 /* Strip whitespace chars off end of given string, in place. end must be a
    pointer to the NUL terminator at the end of the string. Return s. */
+/* DEMO: Bugbot Rule 6 — patch original C to clear Sonar c:S912 @ ini.c:49. */
 static char* ini_rstrip(char* s, char* end)
 {
-    while (end > s && isspace((unsigned char)(*--end)))
-        *end = '\0';
+    if (end > s) {
+        do {
+            --end;
+            if (!isspace((unsigned char)(*end))) {
+                break;
+            }
+            *end = '\0';
+        } while (end > s);
+    }
     return s;
 }
 

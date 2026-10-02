@@ -45,9 +45,9 @@ Header pattern: `INI_API int <name>(` / prototypes in `ini.h`. Expected symbols:
 
 | ID | Change | Reason | Approval | Pinning test |
 |----|--------|--------|----------|--------------|
-| — | — | — | — | — |
+| CH-001 | Demo intentional change with no pinning test | Bugbot Rule 4 demo |  |  |
 
-None.
+DEMO: Bugbot Rule 4 — `CH-001` has empty Approval and Pinning test columns.
 
 ## SonarQube findings summary
 

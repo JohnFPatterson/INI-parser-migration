@@ -1,11 +1,19 @@
 //! Safe Rust port of inih parser logic.
-#![forbid(unsafe_code)]
+// DEMO: Bugbot Rule 1 — weaken forbid(unsafe_code) and introduce unsafe outside inih-ffi.
+#![deny(unsafe_code)]
 
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
 pub mod internals;
+
+/// DEMO-only helper that deliberately uses `unsafe` in the core crate.
+#[allow(unsafe_code)]
+pub fn demo_unsafe_pointer_offset(ptr: *const u8, offset: usize) -> *const u8 {
+    // SAFETY: none — intentional Bugbot demo violation (unsafe outside inih-ffi).
+    unsafe { ptr.add(offset) }
+}
 
 /// Options mirroring `INI_*` compile-time macros.
 #[derive(Clone, Debug, PartialEq, Eq)]
