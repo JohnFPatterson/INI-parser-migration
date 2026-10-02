@@ -17,42 +17,10 @@ respectively).
 #include <io.h>
 #include <fcntl.h>
 #endif
-#include "../ini.h"
-
 int User;
 char Prev_section[50];
 
-#if INI_HANDLER_LINENO
-int dumper(void* user, const char* section, const char* name,
-           const char* value, int lineno)
-#else
-int dumper(void* user, const char* section, const char* name,
-           const char* value)
-#endif
-{
-    User = *((int*)user);
-    if (!name || strcmp(section, Prev_section)) {
-        printf("... [%s]\n", section);
-        strncpy(Prev_section, section, sizeof(Prev_section));
-        Prev_section[sizeof(Prev_section) - 1] = '\0';
-    }
-    if (!name) {
-        return 1;
-    }
-
-#if INI_HANDLER_LINENO
-    printf("... %s%s%s;  line %d\n", name, value ? "=" : "", value ? value : "", lineno);
-#else
-    printf("... %s%s%s;\n", name, value ? "=" : "", value ? value : "");
-#endif
-
-    if (!value) {
-        /* Happens when INI_ALLOW_NO_VALUE=1 and line has no value (no '=' or ':') */
-        return 1;
-    }
-
-    return strcmp(name, "user") == 0 && strcmp(value, "parse_error") == 0 ? 0 : 1;
-}
+#include "ini_dumper.h"
 
 void parse(const char* fname) {
     static int u = 100;

@@ -9,11 +9,12 @@
 #include <io.h>
 #include <fcntl.h>
 #endif
-#include "../ini.h"
-
 static int User;
 static char Prev_section[50];
 static int g_user_val = 100;
+
+#define INI_DUMPER_STATIC
+#include "../tests/ini_dumper.h"
 
 #if INI_CUSTOM_ALLOCATOR
 void* ini_malloc(size_t size) {
@@ -29,36 +30,6 @@ void* ini_realloc(void* ptr, size_t size) {
     return realloc(ptr, size);
 }
 #endif
-
-#if INI_HANDLER_LINENO
-static int dumper(void* user, const char* section, const char* name,
-                  const char* value, int lineno)
-#else
-static int dumper(void* user, const char* section, const char* name,
-                  const char* value)
-#endif
-{
-    User = *((int*)user);
-    if (!name || strcmp(section, Prev_section)) {
-        printf("... [%s]\n", section);
-        strncpy(Prev_section, section, sizeof(Prev_section));
-        Prev_section[sizeof(Prev_section) - 1] = '\0';
-    }
-    if (!name) {
-        return 1;
-    }
-
-#if INI_HANDLER_LINENO
-    printf("... %s%s%s;  line %d\n", name, value ? "=" : "", value ? value : "", lineno);
-#else
-    printf("... %s%s%s;\n", name, value ? "=" : "", value ? value : "");
-#endif
-
-    if (!value) {
-        return 1;
-    }
-    return strcmp(name, "user") == 0 && strcmp(value, "parse_error") == 0 ? 0 : 1;
-}
 
 #if ORACLE_MODE != 0
 static const char* string_display_name(const char* stem) {
