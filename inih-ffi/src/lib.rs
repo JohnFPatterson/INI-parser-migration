@@ -226,7 +226,7 @@ pub unsafe extern "C" fn ini_parse_string(
 #[no_mangle]
 pub unsafe extern "C" fn ini_parse_string_length(
     string: *const c_char,
-    length: u64,
+    length: usize,
     handler: IniHandlerFn,
     user: *mut c_void,
 ) -> c_int {
@@ -234,7 +234,7 @@ pub unsafe extern "C" fn ini_parse_string_length(
         return 0;
     }
     // SAFETY: caller guarantees `length` bytes at `string`.
-    let bytes = unsafe { slice::from_raw_parts(string.cast::<u8>(), length as usize) };
+    let bytes = unsafe { slice::from_raw_parts(string.cast::<u8>(), length) };
     let cfg = feature_config();
     let mut ch = CHandler { f: handler, user };
     core_parse_string_length(&cfg, bytes, &mut ch) as c_int
