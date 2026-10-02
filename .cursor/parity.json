@@ -1,0 +1,16 @@
+{
+  "build": ["make", "parity-build"],
+  "c_cmd": ["./build/oracle", "{input}"],
+  "rust_cmd": ["./target/release/inih-rust-driver", "{input}"],
+  "input_mode": "arg",
+  "fixtures": ["tests/parity/**/*"],
+  "report_dir": "build/parity-gate",
+  "oracle_sources": ["ini.c", "ini.h"],
+  "exceptions_file": "PARITY_EXCEPTIONS.md",
+  "exceptions_rs": ["inih-core/tests/exceptions.rs"],
+  "exceptions_test": ["cargo", "test", "-p", "inih-core", "--test", "exceptions", "--target-dir", "target"],
+  "per_run_timeout_s": 30,
+  "build_timeout_s": 600,
+  "compare_stderr": false,
+  "hash_exclude": ["build/**", "target/**"]
+}

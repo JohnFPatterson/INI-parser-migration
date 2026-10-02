@@ -1,0 +1,28 @@
+[package]
+name = "inih-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C ABI shim for inih-core"
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+name = "inih_ffi"
+
+[features]
+default = ["multi-line", "utf8-bom", "inline-comments", "use-stack"]
+multi-line = []
+utf8-bom = []
+inline-comments = []
+use-stack = []
+allow-realloc = []
+stop-on-first-error = []
+handler-lineno = []
+call-handler-on-new-section = []
+allow-no-value = []
+custom-allocator = []
+# Heap mode is the absence of use-stack; keep explicit feature for docs/tests.
+use-heap = []
+
+[dependencies]
+inih-core = { path = "../inih-core" }

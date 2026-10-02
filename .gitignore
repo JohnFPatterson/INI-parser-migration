@@ -1,2 +1,8 @@
 fuzzing/findings
 fuzzing/inihfuzz
+
+target/
+build/
+
+.cursor/hooks/c-rust-parity/state/
+build/
